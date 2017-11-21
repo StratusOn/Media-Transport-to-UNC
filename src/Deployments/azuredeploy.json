@@ -1,0 +1,193 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters":
+  {
+    "location":
+    {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata":
+      {
+        "description": "The location of the resources (Azure region)"
+      }
+    },
+    "sourceStorageAccountName":
+    {
+      "type": "string",
+      "metadata":
+      {
+        "description": "Mandatory. The name of the storage account that is to be monitored by the Azure Function."
+      }
+    },
+    "sourceContainerName":
+    {
+      "type": "string",
+      "defaultValue": "uploads",
+      "metadata":
+      {
+        "description": "The name of the storage account container that is to be monitored by the Azure Function."
+      }
+    },
+    "targetStorageAccountName":
+    {
+      "type": "string",
+      "metadata":
+      {
+        "description":
+          "Mandatory. The name of the storage account that contains the file share to which source files are to be copied by the Azure Function."
+      }
+    },
+    "targetShareName":
+    {
+      "type": "string",
+      "defaultValue": "share1",
+      "metadata":
+      {
+        "description": "The name of the Azure Files share to which source files are to be copied."
+      }
+    },
+    "targetFolderName":
+    {
+      "type": "string",
+      "defaultValue": "transport",
+      "metadata":
+      {
+        "description": "The name of the folder in the Azure Files share."
+      }
+    }
+  },
+  "variables":
+    {
+      "uniqueSuffix": "[uniqueString(resourceGroup().id, deployment().name)]",
+      "storageAccountName": "[concat('stor', variables('uniqueSuffix'))]",
+      "hostingPlanName": "[concat('plan', variables('uniqueSuffix'))]",
+      "functionAppName": "[concat('func', variables('uniqueSuffix'))]",
+      "storageApiVersion": "2016-12-01",
+      "appServiceApiVersion": "2016-08-01",
+      "hostingPlanApiVersion": "2016-09-01",
+      "mediaTransport2UncFileShareFunction":
+      {
+        "functionName": "MediaTransport2UncFileShare",
+        "functionFiles":
+        {
+          "run.csx": "#r \"Microsoft.WindowsAzure.Storage\"\r\n#load \"BlobToFileCopyUtility.cs\"\r\n\r\nusing System.Threading.Tasks;\r\nusing Microsoft.Azure.WebJobs;\r\nusing Microsoft.Azure.WebJobs.Host;\r\nusing Microsoft.WindowsAzure.Storage.Blob;\r\n\r\npublic static async Task Run(CloudBlockBlob blob, string name, TraceWriter log)\r\n{\r\n    log.Info($\"C# Blob trigger function Processed blob\\nSource Name: {name} \\nSource Uri: {blob.Uri}\");\r\n    await BlobToFileCopyUtility.CopyBlockBlobToFile(blob, log);\r\n}\r\n",
+          "project.json": "{\r\n  \"frameworks\":\r\n  {\r\n    \"net46\":\r\n    {\r\n      \"dependencies\":\r\n      {\r\n        \"WindowsAzure.Storage\": \"7.2.1\"\r\n      }\r\n    }\r\n  }\r\n}",
+          "function.json": "[concat('{\r\n  \"bindings\":\r\n  [\r\n    {\r\n      \"name\": \"blob\",\r\n      \"type\": \"blobTrigger\",\r\n      \"direction\": \"in\",\r\n      \"path\": \"', parameters('sourceContainerName'), '/{name}\",\r\n      \"connection\": \"UploadsStorage\"\r\n    }\r\n  ],\r\n  \"disabled\": false\r\n}')]",
+          "BlobToFileCopyUtility.cs": "using System;\r\nusing System.Configuration;\r\nusing System.IO;\r\nusing System.Threading.Tasks;\r\nusing Microsoft.Azure.WebJobs.Host;\r\nusing Microsoft.WindowsAzure.Storage;\r\nusing Microsoft.WindowsAzure.Storage.Blob;\r\nusing Microsoft.WindowsAzure.Storage.File;\r\n\r\npublic static class BlobToFileCopyUtility\r\n{\r\n    public static async Task CopyBlockBlobToFile(CloudBlockBlob sourceBlob, TraceWriter log)\r\n    {\r\n        try\r\n        {\r\n            // 1) Get source file settings.\r\n            string targetConnectionString = ConfigurationManager.AppSettings[\"TARGET_STORAGEACCOUNT_CONNECTIONSTRING\"];\r\n            string fileShareName = ConfigurationManager.AppSettings[\"TARGET_FILESHARE_NAME\"];\r\n            string fileShareFolderName = ConfigurationManager.AppSettings[\"TARGET_FILESHARE_FOLDERNAME\"];\r\n            // Assumes the name does not contain separators (e.g. \"/\" to designate nested folders):\r\n            string targetFileName = sourceBlob.Name;\r\n            bool deleteSourceBlobAfterTransferSuccess = bool.Parse(ConfigurationManager.AppSettings[\"DELETE_SOURCEBLOB_AFTER_TRANSFER_SUCCESS\"]);\r\n\r\n            // 2) Copy to Azure Files.\r\n            await CopyBlobToAzureFiles(sourceBlob, targetConnectionString, fileShareName, fileShareFolderName, targetFileName, log);\r\n\r\n            if (deleteSourceBlobAfterTransferSuccess)\r\n            {\r\n                await sourceBlob.DeleteAsync();\r\n            }\r\n        }\r\n        catch (Exception exception)\r\n        {\r\n            log.Error($\"Error: {exception.Message}\\n{exception.StackTrace}\");\r\n        }\r\n    }\r\n\r\n    private static async Task CopyBlobToAzureFiles(CloudBlockBlob sourceBlob, string targetConnectionString, string fileShareName, string fileShareFolderName, string targetFileName, TraceWriter log)\r\n    {\r\n        CloudStorageAccount storageAccount = CloudStorageAccount.Parse(targetConnectionString);\r\n        CloudFileClient fileClient = storageAccount.CreateCloudFileClient();\r\n        CloudFileShare share = fileClient.GetShareReference(fileShareName);\r\n\r\n        if (!share.Exists())\r\n        {\r\n            await share.CreateAsync();\r\n        }\r\n\r\n        CloudFileDirectory rootDir = share.GetRootDirectoryReference();\r\n        CloudFileDirectory targetDir = rootDir.GetDirectoryReference(fileShareFolderName);\r\n        await targetDir.CreateIfNotExistsAsync();\r\n        CloudFile file = targetDir.GetFileReference(targetFileName);\r\n        string localFilePath = GetLocalFilePath(sourceBlob.Name, log);\r\n\r\n        try\r\n        {\r\n            await sourceBlob.DownloadToFileAsync(localFilePath, FileMode.Create);\r\n            log.Info($\"Successfully downloaded to local file: {localFilePath}\");\r\n            await file.UploadFromFileAsync(localFilePath);\r\n            log.Info($\"Successfully uploaded local file to target share: {file.Uri.AbsoluteUri}\");\r\n        }\r\n        finally\r\n        {\r\n            if (File.Exists(localFilePath))\r\n            {\r\n                File.Delete(localFilePath);\r\n                log.Info($\"Successfully deleted local file: {localFilePath}\");\r\n            }\r\n        }\r\n    }\r\n\r\n    private static string GetLocalFilePath(string fileName, TraceWriter log)\r\n    {\r\n        string folderName = $\"{new Random().Next(10000000, 99999999)}\";\r\n        string tempFolderPath = Path.Combine(Path.GetTempPath(), folderName);\r\n        if (!Directory.Exists(tempFolderPath))\r\n        {\r\n            Directory.CreateDirectory(tempFolderPath);\r\n        }\r\n\r\n        string localFilePath = Path.Combine(tempFolderPath, fileName);\r\n        log.Info($\"Local File Path: {localFilePath}\");\r\n        return localFilePath;\r\n    }\r\n}\r\n"
+        }
+      }
+    },
+    "resources":
+    [
+      {
+        "apiVersion": "[variables('storageApiVersion')]",
+        "type": "Microsoft.Storage/storageAccounts",
+        "name": "[variables('storageAccountName')]",
+        "location": "[parameters('location')]",
+        "kind": "Storage",
+        "sku":
+        {
+          "name": "Standard_LRS"
+        }
+      },
+      {
+        "type": "Microsoft.Web/serverfarms",
+        "apiVersion": "[variables('hostingPlanApiVersion')]",
+        "name": "[variables('hostingPlanName')]",
+        "location": "[parameters('location')]",
+        "dependsOn":
+        [
+          "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        ],
+        "properties":
+        {
+          "name": "[variables('hostingPlanName')]",
+          "computeMode": "Shared",
+          "kind": "functionapp"
+        },
+        "sku":
+        {
+          "name": "Y1",
+          "tier": "Dynamic",
+          "size": "Y1",
+          "family": "Y",
+          "capacity": 0
+        }
+      },
+      {
+        "apiVersion": "[variables('appServiceApiVersion')]",
+        "name": "[variables('functionAppName')]",
+        "type": "Microsoft.Web/sites",
+        "location": "[parameters('location')]",
+        "kind": "functionapp",
+        "dependsOn":
+        [
+          "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+        ],
+        "properties":
+        {
+          "name": "[variables('functionAppName')]",
+          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+          "siteConfig":
+          {
+            "appSettings":
+            [
+              {
+                "name": "AzureWebJobsDashboard",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              },
+              {
+                "name": "AzureWebJobsStorage",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              },
+              {
+                "name": "FUNCTIONS_EXTENSION_VERSION",
+                "value": "~1"
+              },
+              {
+                "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              },
+              {
+                "name": "WEBSITE_CONTENTSHARE",
+                "value": "[concat(toLower(variables('functionAppName')), '9e6d5a406cbc')]"
+              },
+              {
+                "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                "value": "6.5.0"
+              },
+              {
+                "name": "WEBSITE_USE_PLACEHOLDER",
+                "value": "0"
+              },
+              {
+                "name": "UploadsStorage",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('sourceStorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('sourceStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              },
+              {
+                "name": "TARGET_STORAGEACCOUNT_CONNECTIONSTRING",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('targetStorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('targetStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              },
+              {
+                "name": "TARGET_FILESHARE_NAME",
+                "value": "[parameters('targetShareName')]"
+              },
+              {
+                "name": "TARGET_FILESHARE_FOLDERNAME",
+                "value": "[parameters('targetFolderName')]"
+              },
+              {
+                "name": "DELETE_SOURCEBLOB_AFTER_TRANSFER_SUCCESS",
+                "value": "false"
+              }
+            ]
+          },
+          "clientAffinityEnabled": false
+        }
+      }
+    ],
+    "outputs":
+    {
+    }
+  }

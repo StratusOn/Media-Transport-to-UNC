@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2009
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{151D2E53-A2C4-4D7D-83FE-D05416EBD58E}") = "Deployments", "Deployments\Deployments.deployproj", "{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaTransport2UNC.FunctionApps", "MediaTransport2UNC.FunctionApps\MediaTransport2UNC.FunctionApps.csproj", "{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FDC46A02-AC46-40EE-9A0F-37BF3759FF47}
+	EndGlobalSection
+EndGlobal
