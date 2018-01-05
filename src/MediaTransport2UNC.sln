@@ -1,11 +1,16 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27004.2009
+VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{151D2E53-A2C4-4D7D-83FE-D05416EBD58E}") = "Deployments", "Deployments\Deployments.deployproj", "{7CA73FDF-EF15-41D0-B187-01C1A72C6A7C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaTransport2UNC.FunctionApps", "MediaTransport2UNC.FunctionApps\MediaTransport2UNC.FunctionApps.csproj", "{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MediaTransport2UNC.FunctionApps", "MediaTransport2UNC.FunctionApps\MediaTransport2UNC.FunctionApps.csproj", "{30A4BF8B-ECB0-47D8-B87E-AFDD6E368F6B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{B809A05E-D892-4758-B4E8-B5553BAACC2F}"
+	ProjectSection(SolutionItems) = preProject
+		..\README.md = ..\README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
