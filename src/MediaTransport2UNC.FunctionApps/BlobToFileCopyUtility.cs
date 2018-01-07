@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Configuration;
 using System.Diagnostics;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.WindowsAzure.Storage;
@@ -11,6 +10,8 @@ using Microsoft.WindowsAzure.Storage.File;
 // This class has no namespace to make it easier to include in both the local Function App project (compiled DLL, debug with VS) as well as a helper class to the CSX Function App C# script file.
 public static class BlobToFileCopyUtility
 {
+    private const double SAS_EXPIRATION_IN_HOURS = 24;
+
     public static async Task CopyBlockBlobToFile(CloudBlockBlob sourceBlob, TraceWriter log)
     {
         try
@@ -40,11 +41,13 @@ public static class BlobToFileCopyUtility
         catch (Exception exception)
         {
             log.Error($"Error in CopyBlockBlobToFile: {exception.Message}\n{exception.StackTrace}");
+            throw;
         }
     }
 
     private static async Task CopyBlobToAzureFiles(CloudBlockBlob sourceBlob, string targetConnectionString, string fileShareName, string fileShareFolderName, string targetFileName, TraceWriter log)
     {
+        // Reference: https://github.com/Azure-Samples/storage-file-dotnet-getting-started/blob/master/FileStorage/GettingStarted.cs
         CloudStorageAccount storageAccount = CloudStorageAccount.Parse(targetConnectionString);
         CloudFileClient fileClient = storageAccount.CreateCloudFileClient();
         CloudFileShare share = fileClient.GetShareReference(fileShareName);
@@ -58,68 +61,34 @@ public static class BlobToFileCopyUtility
         CloudFileDirectory rootDir = share.GetRootDirectoryReference();
         CloudFileDirectory targetDir = rootDir.GetDirectoryReference(fileShareFolderName);
         await targetDir.CreateIfNotExistsAsync();
-        string localFilePath = GetLocalFilePath(sourceBlob.Name, log);
+        string[] sourceFolders = sourceBlob.Name.Split('/');
+        if (sourceFolders.Length > 1)
+        {
+            for (int i = 0; i < sourceFolders.Length - 1; i++)
+            {
+                var subfolderName = sourceFolders[i];
+                log.Info($"Creating subfolder: {subfolderName}");
+                targetDir = targetDir.GetDirectoryReference(subfolderName);
+                await targetDir.CreateIfNotExistsAsync();
+            }
+
+            targetFileName = sourceFolders[sourceFolders.Length - 1];
+        }
+
+        CloudFile file = targetDir.GetFileReference(targetFileName);
+        string blobSas = sourceBlob.GetSharedAccessSignature(new SharedAccessBlobPolicy()
+        {
+            Permissions = SharedAccessBlobPermissions.Read,
+            SharedAccessExpiryTime = DateTime.UtcNow.AddHours(SAS_EXPIRATION_IN_HOURS)
+        });
+
+        var blobSasUri = new Uri($"{sourceBlob.StorageUri.PrimaryUri}{blobSas}");
+        log.Info($"Source blob SAS URL (expires in {SAS_EXPIRATION_IN_HOURS} hours): {blobSasUri}");
+        log.Info($"Copying source blob to target file share: {file.Uri.AbsoluteUri}");
         Stopwatch sw = new Stopwatch();
-
-        try
-        {
-            log.Info($"Downloading to local file: {localFilePath}");
-            sw.Start();
-            await sourceBlob.DownloadToFileAsync(localFilePath, FileMode.Create);
-            sw.Stop();
-            log.Info($"Successfully downloaded (in {sw.ElapsedMilliseconds} msecs) to local file: {localFilePath}");
-
-            string[] sourceFolders = sourceBlob.Name.Split('/');
-            if (sourceFolders.Length > 1)
-            {
-                for (int i = 0; i < sourceFolders.Length - 1; i++)
-                {
-                    var subfolderName = sourceFolders[i];
-                    log.Info($"Creating subfolder: {subfolderName}");
-                    targetDir = targetDir.GetDirectoryReference(subfolderName);
-                    await targetDir.CreateIfNotExistsAsync();
-                }
-
-                CloudFile file = targetDir.GetFileReference(sourceFolders[sourceFolders.Length - 1]);
-                log.Info($"Uploading local file to target share under subfolder: {file.Uri.AbsoluteUri}");
-                sw.Restart();
-                await file.UploadFromFileAsync(localFilePath);
-                sw.Stop();
-                log.Info($"Successfully uploaded (in {sw.ElapsedMilliseconds} msecs) root local file to target share under subfolder: {file.Uri.AbsoluteUri}");
-            }
-            else
-            {
-                CloudFile file = targetDir.GetFileReference(targetFileName);
-                log.Info($"Uploading local file to target share root folder: {file.Uri.AbsoluteUri}");
-                sw.Restart();
-                await file.UploadFromFileAsync(localFilePath);
-                sw.Stop();
-                log.Info($"Successfully uploaded (in {sw.ElapsedMilliseconds} msecs) local file to target share root folder: {file.Uri.AbsoluteUri}");
-            }
-        }
-        finally
-        {
-            if (File.Exists(localFilePath))
-            {
-                log.Info($"Deleting local file: {localFilePath}");
-                File.Delete(localFilePath);
-            }
-        }
-    }
-
-    private static string GetLocalFilePath(string fileName, TraceWriter log)
-    {
-        string folderName = $"{new Random().Next(10000000, 99999999)}";
-        string tempFolderPath = Path.Combine(Path.GetTempPath(), folderName);
-        string localFilePath = Path.Combine(tempFolderPath, fileName);
-        var localFile = new FileInfo(localFilePath);
-        if (!localFile.Directory.Exists)
-        {
-            log.Info($"Creating local temp directory: {localFile.Directory}");
-            localFile.Directory.Create();
-        }
-
-        log.Info($"Local File Path: {localFile.FullName}");
-        return localFile.FullName;
+        sw.Start();
+        await file.StartCopyAsync(blobSasUri);
+        sw.Stop();
+        log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) source blob to target file share: {file.Uri.AbsoluteUri}");
     }
 }
