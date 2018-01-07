@@ -29,7 +29,7 @@
         "description": "The name of the storage account container that is to be monitored by the Azure Function."
       }
     },
-    "sourceStorageAccountResourceGroup":
+    "sourceAccountResourceGroup":
     {
       "type": "string",
       "defaultValue": "[resourceGroup().name]",
@@ -64,7 +64,7 @@
         "description": "The name of the folder in the Azure Files share."
       }
     },
-    "targetStorageAccountResourceGroup":
+    "targetAccountResourceGroup":
     {
       "type": "string",
       "defaultValue": "[resourceGroup().name]",
@@ -181,11 +181,11 @@
             },
             {
               "name": "UploadsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('sourceStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('sourceStorageAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('sourceStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('sourceStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('sourceAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('sourceStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
             },
             {
               "name": "TARGET_STORAGEACCOUNT_CONNECTIONSTRING",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('targetStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('targetStorageAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('targetStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('targetStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('targetAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('targetStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
             },
             {
               "name": "TARGET_FILESHARE_NAME",

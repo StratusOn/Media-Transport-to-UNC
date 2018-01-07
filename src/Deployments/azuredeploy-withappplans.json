@@ -29,6 +29,15 @@
         "description": "The name of the storage account container that is to be monitored by the Azure Function."
       }
     },
+    "sourceAccountResourceGroup":
+    {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata":
+      {
+        "description": "Optional. The name of the source storage account's resource group if not the same as the current resource group."
+      }
+    },
     "targetStorageAccountName":
     {
       "type": "string",
@@ -55,6 +64,15 @@
         "description": "The name of the folder in the Azure Files share."
       }
     },
+    "targetAccountResourceGroup":
+    {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata":
+      {
+        "description": "Optional. The name of the target storage account's resource group if not the same as the current resource group."
+      }
+    },
     "appServicePlan":
     {
       "type": "string",
@@ -63,8 +81,20 @@
       {
         "description": "The App Service Plan to use for the Funciton App. More information here: https://azure.microsoft.com/en-us/pricing/details/app-service/."
       },
-      "allowedValues": [
-        "B1", "B2", "B3", "S1", "S2", "S3", "P1v2", "P2v2", "P3v2", "I1", "I2", "I3"
+      "allowedValues":
+      [
+        "B1",
+        "B2",
+        "B3",
+        "S1",
+        "S2",
+        "S3",
+        "P1v2",
+        "P2v2",
+        "P3v2",
+        "I1",
+        "I2",
+        "I3"
       ]
     },
     "numInstances":
@@ -180,11 +210,11 @@
             },
             {
               "name": "UploadsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('sourceStorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('sourceStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('sourceStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('sourceAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('sourceStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
             },
             {
               "name": "TARGET_STORAGEACCOUNT_CONNECTIONSTRING",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('targetStorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('targetStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('targetStorageAccountName'),';AccountKey=',listKeys(resourceId(parameters('targetAccountResourceGroup'), 'Microsoft.Storage/storageAccounts', parameters('targetStorageAccountName')), variables('storageApiVersion')).keys[0].value)]"
             },
             {
               "name": "TARGET_FILESHARE_NAME",
