@@ -10,7 +10,8 @@ using Microsoft.WindowsAzure.Storage.File;
 // This class has no namespace to make it easier to include in both the local Function App project (compiled DLL, debug with VS) as well as a helper class to the CSX Function App C# script file.
 public static class BlobToFileCopyUtility
 {
-    private const double SAS_EXPIRATION_IN_HOURS = 24;
+    private const double SasExpirationInHours = 24;
+    private const int CopyOperationWaitInMilliseconds = 500;
 
     public static async Task CopyBlockBlobToFile(CloudBlockBlob sourceBlob, TraceWriter log)
     {
@@ -81,15 +82,17 @@ public static class BlobToFileCopyUtility
         string blobSas = sourceBlob.GetSharedAccessSignature(new SharedAccessBlobPolicy()
         {
             Permissions = SharedAccessBlobPermissions.Read,
-            SharedAccessExpiryTime = DateTime.UtcNow.AddHours(SAS_EXPIRATION_IN_HOURS)
+            SharedAccessExpiryTime = DateTime.UtcNow.AddHours(SasExpirationInHours)
         });
 
         var blobSasUri = new Uri($"{sourceBlob.StorageUri.PrimaryUri}{blobSas}");
-        log.Info($"Source blob SAS URL (expires in {SAS_EXPIRATION_IN_HOURS} hours): {blobSasUri}");
+        log.Info($"Source blob SAS URL (expires in {SasExpirationInHours} hours): {blobSasUri}");
         log.Info($"Copying source blob to temporary target file share: {tempFile.Uri.AbsoluteUri}");
         Stopwatch sw = new Stopwatch();
         sw.Start();
         await tempFile.StartCopyAsync(blobSasUri);
+        await WaitForCopyAsync(tempFile, log);
+        ThrowIfCopyNotSuccessful(tempFile);
         sw.Stop();
         log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) source blob to temporary target file share: {tempFile.Uri.AbsoluteUri}");
 
@@ -98,6 +101,8 @@ public static class BlobToFileCopyUtility
         log.Info($"Copying temporary target file to final target file: {file.Uri.AbsoluteUri}");
         sw.Restart();
         await file.StartCopyAsync(tempFile);
+        await WaitForCopyAsync(file, log);
+        ThrowIfCopyNotSuccessful(file);
         sw.Stop();
         log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) temporary target file to final target file: {file.Uri.AbsoluteUri}");
 
@@ -107,5 +112,26 @@ public static class BlobToFileCopyUtility
         await tempFile.DeleteAsync();
         sw.Stop();
         log.Info($"Successfully deleted (in {sw.ElapsedMilliseconds} msecs) temporary target file: {tempFile.Uri.AbsoluteUri}");
+    }
+
+    private static async Task WaitForCopyAsync(CloudFile file, TraceWriter log)
+    {
+        // Reference: https://github.com/Azure/azure-storage-net/blob/master/Test/WindowsRuntime/File/FileTestBase.cs
+        log.Info($"Waiting for copy operation to finish. (wait interval: {CopyOperationWaitInMilliseconds} msecs).");
+        bool copyInProgress = true;
+        while (copyInProgress)
+        {
+            await Task.Delay(CopyOperationWaitInMilliseconds);
+            await file.FetchAttributesAsync();
+            copyInProgress = (file.CopyState.Status == CopyStatus.Pending);
+        }
+    }
+
+    private static void ThrowIfCopyNotSuccessful(CloudFile file)
+    {
+        if (file.CopyState.Status != CopyStatus.Success)
+        {
+            throw new Exception($"Copy operation failed with status: {file.CopyState.Status}.");
+        }
     }
 }
