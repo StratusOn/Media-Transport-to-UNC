@@ -75,7 +75,9 @@ public static class BlobToFileCopyUtility
             targetFileName = sourceFolders[sourceFolders.Length - 1];
         }
 
-        CloudFile file = targetDir.GetFileReference(targetFileName);
+        // Copy the source file to a temporary file.
+        string targetTempFileName = $"{targetFileName}.tmp";
+        CloudFile tempFile = targetDir.GetFileReference(targetTempFileName);
         string blobSas = sourceBlob.GetSharedAccessSignature(new SharedAccessBlobPolicy()
         {
             Permissions = SharedAccessBlobPermissions.Read,
@@ -84,11 +86,26 @@ public static class BlobToFileCopyUtility
 
         var blobSasUri = new Uri($"{sourceBlob.StorageUri.PrimaryUri}{blobSas}");
         log.Info($"Source blob SAS URL (expires in {SAS_EXPIRATION_IN_HOURS} hours): {blobSasUri}");
-        log.Info($"Copying source blob to target file share: {file.Uri.AbsoluteUri}");
+        log.Info($"Copying source blob to temporary target file share: {tempFile.Uri.AbsoluteUri}");
         Stopwatch sw = new Stopwatch();
         sw.Start();
-        await file.StartCopyAsync(blobSasUri);
+        await tempFile.StartCopyAsync(blobSasUri);
         sw.Stop();
-        log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) source blob to target file share: {file.Uri.AbsoluteUri}");
+        log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) source blob to temporary target file share: {tempFile.Uri.AbsoluteUri}");
+
+        // Rename the copied temporary file to original name.
+        CloudFile file = targetDir.GetFileReference(targetFileName);
+        log.Info($"Copying temporary target file to final target file: {file.Uri.AbsoluteUri}");
+        sw.Restart();
+        await file.StartCopyAsync(tempFile);
+        sw.Stop();
+        log.Info($"Successfully copied (in {sw.ElapsedMilliseconds} msecs) temporary target file to final target file: {file.Uri.AbsoluteUri}");
+
+        // Delete the temporary file.
+        log.Info($"Deleting temporary target file: {tempFile.Uri.AbsoluteUri}");
+        sw.Restart();
+        await tempFile.DeleteAsync();
+        sw.Stop();
+        log.Info($"Successfully deleted (in {sw.ElapsedMilliseconds} msecs) temporary target file: {tempFile.Uri.AbsoluteUri}");
     }
 }
