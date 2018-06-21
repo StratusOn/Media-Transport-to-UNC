@@ -86,7 +86,7 @@
     "mediaTransport2UncFileShareFunction":
     {
       "functionName": "MediaTransport2UncFileShare",
-      "functionFiles": 
+      "functionFiles":
       {
         "run.csx": "#r \"Microsoft.WindowsAzure.Storage\"\r\n#load \"BlobToFileCopyUtility.cs\"\r\n\r\nusing System.Threading.Tasks;\r\nusing Microsoft.Azure.WebJobs;\r\nusing Microsoft.Azure.WebJobs.Host;\r\nusing Microsoft.WindowsAzure.Storage.Blob;\r\n\r\npublic static async Task Run(CloudBlockBlob blob, string name, TraceWriter log)\r\n{\r\n    log.Info($\"C# Blob trigger function Processed blob\\nSource Name: {name} \\nSource Uri: {blob.Uri}\");\r\n    await BlobToFileCopyUtility.CopyBlockBlobToFile(blob, log);\r\n}\r\n",
         "project.json": "{\r\n  \"frameworks\":\r\n  {\r\n    \"net46\":\r\n    {\r\n      \"dependencies\":\r\n      {\r\n        \"WindowsAzure.Storage\": \"7.2.1\"\r\n      }\r\n    }\r\n  }\r\n}",
