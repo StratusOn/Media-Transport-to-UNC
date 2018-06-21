@@ -76,13 +76,15 @@
     "appServicePlan":
     {
       "type": "string",
-      "defaultValue": "S1",
+      "defaultValue": "F1",
       "metadata":
       {
         "description": "The App Service Plan to use for the Funciton App. More information here: https://azure.microsoft.com/en-us/pricing/details/app-service/."
       },
       "allowedValues":
       [
+        "F1",
+        "D1",
         "B1",
         "B2",
         "B3",
